@@ -66,12 +66,3 @@ if __name__ == "__main__":
 
     for x, y in zip(files, file_names):
         describe_df(x, y)
-
-
-# TODO: decide on how to unpack genre_ids
-
-# TODO: decide on how to unpack artist_name
-
-# TODO: decide on how to unpack composer
-
-# TODO: decide on how to unpack lyricist
