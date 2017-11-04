@@ -60,17 +60,44 @@ vec_artist = DictVectorizer().fit(dict_artist)
 # Generate a CSR sparse matrix use the trained DictVectorizer
 m_artist = vec_artist.transform(dict_artist)
 # Train a TruncatedSVD model with m_artist_name
-svd_artist_name = TruncatedSVD(n_components=10,
+svd_components = 10
+rand_seed = 1122
+svd_artist_name = TruncatedSVD(n_components=svd_components,
                                algorithm='randomized',
-                               random_state=1122).fit(m_artist)
+                               n_iter=5,
+                               random_state=rand_seed).fit(m_artist)
+"""
+with 'randomized' algo and 5 iterations
+100 components explained 13% of total variance
+10 components explained 7.6% of total variance
+with 'arpack' algo and 5 iterations
+10 components explained 7.6% of total variance
+with 'randomized' algo and 15 iterations
+10 components explained 7.6% of total variance
+increasing components won't give more information
+and too many componnets will dilute final dataset
+I'll stick with 10 components for now
+"""
 # Generate a svd matrix for song artist_names
 v_artist = svd_artist_name.transform(m_artist)
 
 # Assemble a pd.DataFrame with the artist_svd
-artist_svds = ['artist_svd_'+str(i+1) for i in range(10)]
+# artist_df can be merged into songs df and replace the artist_names column
+artist_svds = ['artist_svd_'+str(i+1) for i in range(svd_components)]
 artist_df = pd.DataFrame(v_artist,
                          columns=artist_svds)
 artist_df['song_id'] = np.array(song_id)
+
+
+# TODO: create a matrix factorization with DictVectorizer and TruncatedSVD on
+# all four songs multilabel variables (genre_ids, artist_names, composer,
+# lyricist), so that more shared variance can be found across the variables
+
+# TODO: create sklearn pipeline to streamline the dictionary->vectorizer->svd
+# process
+
+# TODO: run TruncatedSVD multiple times from 5 components to 100 components and
+# visualize the explained variance to see the "sweet spot"
 
 # TODO: use gensim package to load and write songs table transformation with
 # hard disk to bypass RAM issues
