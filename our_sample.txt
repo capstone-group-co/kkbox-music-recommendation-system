@@ -1,0 +1,15 @@
+msno	song_id	target
+Tarek	Song1	1
+Tarek	Song2	1
+Tarek	Song4	1
+Tarek	Song5	0
+John	Song4	1
+John	Song5	1
+Bob	Song5	1
+David	Song6	1
+David	Song5	0
+Steve	Song6	1
+Steve	Song7	1
+Elvin	Song1	1
+Elvin	Song2	1
+Elvin	Song3	1
