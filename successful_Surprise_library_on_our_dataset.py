@@ -1,7 +1,7 @@
 
 # coding: utf-8
 
-# In[54]:
+# In[122]:
 
 
 # Import the `Train_Test Split function from Scikit library` library
@@ -20,20 +20,20 @@ train = pd.read_csv("C:/Data/Fall 2017/Capstone/raw_data/train.csv")
 train['target']= train.target.astype('category')
 
 
-# In[55]:
+# In[123]:
 
 
 # Divide the train dataset to train and test 
 model_train, model_test = train_test_split(train, test_size=0.2)
 
 
-# In[57]:
+# In[124]:
 
 
 print(model_train.shape,model_test.shape)
 
 
-# In[58]:
+# In[125]:
 
 
 # Use 'Surprise' library for building a CF(Collaborative Filtering) Recommendation System
@@ -47,7 +47,7 @@ model_train= model_train.drop(['source_system_tab','source_screen_name','source_
 model_test= model_test.drop(['source_system_tab','source_screen_name','source_type'], axis=1)
 
 
-# In[60]:
+# In[126]:
 
 
 from surprise import SVD
@@ -60,7 +60,7 @@ reader = Reader(rating_scale=(0, 1))
 data = Dataset.load_from_df(model_train[['msno', 'song_id', 'target']], reader)
 
 
-# In[61]:
+# In[127]:
 
 
 #select the SVD algorithm from the Surprise library 
@@ -73,7 +73,7 @@ trainset = data.build_full_trainset()
 algo.train(trainset)
 
 
-# In[68]:
+# In[128]:
 
 
 # Create a for loop to predict each row of the splitted test and save it to my_pred dataframe
@@ -92,7 +92,7 @@ my_pred.columns=['userid','itemid','actual_rating','predicted_rating']
 my_pred.sample(10)    
 
 
-# In[ ]:
+# In[73]:
 
 
 # Results looking good, we need to create a threshold  for example "IF predicted_rating > 0.5 then '1' else '0')   
@@ -100,4 +100,21 @@ my_pred.sample(10)
 # once we get a good threshold we apply it on the test dataset and submit and check our rankings.
 
 # You can use this predicted_rating as an additional varibale to predict 
+
+
+# In[129]:
+
+
+#Create a final prediction decision according to a defined threshold (for example 0.3)
+# Create the new column that converts the result if more than (0.3) to '1' else '0'
+my_pred['final_prediction']= (my_pred.predicted_rating>0.3)*1
+my_pred.head(5)
+
+
+# In[135]:
+
+
+# Evaluate the model by checking how counting how many right and wrong predictions
+performance=my_pred['final_prediction']==my_pred['actual_rating']
+print("Model have predicted",round((sum(performance)/len(performance))*100,2),"%")
 
