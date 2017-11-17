@@ -213,10 +213,16 @@ def main_table_engineering(main_df):
                             range(source_type_bi_v.shape[1])]
     for i, name in enumerate(source_type_binaries):
         main_df[name] = source_type_bi_v[:, i].astype(float)
-    main_df.drop(['source_system_tab', 'source_screen_name', 'source_type'],
-                 axis=1)
+    main_df = main_df.drop(
+        ['source_system_tab', 'source_screen_name', 'source_type'], axis=1)
     return main_df
 
+temp_df = train.drop(['target'], axis=1).append(
+    test.drop(['id'], axis=1))
+temp_df = main_table_engineering(temp_df)
+
+train = pd.concat([train, temp_df.iloc[:train.shape[0], 2:]], axis=1)
+test = pd.concat([test, temp_df.iloc[train.shape[0]:, 2:]], axis=1)
 train = main_table_engineering(train)
 print(">>> train cleaned")
 test = main_table_engineering(test)
@@ -267,8 +273,12 @@ test['cf_score'] = get_cf_score(test, cf_algo)
 print(">>> cf score generated")
 
 """
-FINAL TABEL ASSEMBLING
+FINAL TABLE ASSEMBLING
 """
+train = train.drop(['source_screen_name', 'source_system_tab', 'source_type'],
+                   axis=1)
+test = test.drop(['source_screen_name', 'source_system_tab', 'source_type'],
+                 axis=1)
 print(">>> merging train with songs and members")
 train = train.merge(songs, on='song_id').merge(members, on='msno')
 print(">>> train now has %i variables and %i observations" %
