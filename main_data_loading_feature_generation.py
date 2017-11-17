@@ -277,5 +277,7 @@ print(">>> merging test with songs and members")
 test = test.merge(songs, on='song_id').merge(members, on='msno')
 print(">>> test now has %i variables and %i observations" %
       (test.shape[1], test.shape[0]))
+print(train.dtypes)
+print(test.dtypes)
 print(">>> removing unwanted tables to save RAM")
 del songs, members, song_extra_info
