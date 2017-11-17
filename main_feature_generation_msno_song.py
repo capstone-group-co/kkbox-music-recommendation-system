@@ -32,7 +32,7 @@ def get_cf_score(model_data, trained_algo):
         itemid = str(model_data.song_id.iloc[i])
         pred = trained_algo.predict(userid, itemid)
         predicted_rating = pred.est
-        score.append([userid, itemid, predicted_rating])
+        score.append(predicted_rating)
     score = np.array(score)
     return(score)
 
