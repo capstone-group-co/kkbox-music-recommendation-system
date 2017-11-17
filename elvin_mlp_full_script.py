@@ -456,3 +456,5 @@ epoch_performance['epoch_id'] = np.arange(len(epoch_loss)) + 1
 epoch_performance['epoch_loss'] = np.array(epoch_loss)
 epoch_performance['epoch_acc'] = np.array(epoch_acc)
 epoch_performance.to_csv('epoch_performance.csv', index=False)
+
+# TODO: fix memory error problem by deleting objects unused
