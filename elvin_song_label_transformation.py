@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import gensim
-import standardized_import as stanimp
+import main_standardized_import as stanimp
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.decomposition import TruncatedSVD
 
