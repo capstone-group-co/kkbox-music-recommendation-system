@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-import standardized_import as stanimp
+import main_standardized_import as stanimp
 from sklearn.preprocessing import LabelBinarizer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.decomposition import TruncatedSVD
@@ -19,7 +19,7 @@ members, song_extra_info, songs, test, train =\
 
 del members, song_extra_info, test, train
 
-
+print(">>> start binarize songs language")
 # binarize language categories
 language_lb = LabelBinarizer()
 language_lb.fit(songs.language.values.astype(int).reshape(-1, 1))
@@ -30,6 +30,7 @@ for i, name in enumerate(lang_binaries):
     songs[name] = lang_bi_v[:, i]
 
 # matrix factorization on song artist_name
+print(">>> start matrix factorization for songs artist_name")
 # create list of list for the multilabel variable
 artist_names = songs['artist_name'].str.split('&').tolist()
 # create list of unique identifier for later assembling
@@ -53,12 +54,11 @@ v_artist = svd_artist_name.transform(m_artist)
 # Assemble a pd.DataFrame with the artist_svd
 # artist_df can be merged into songs df and replace the artist_names column
 artist_svds = ['artist_svd_'+str(i+1) for i in range(svd_components)]
-artist_df = pd.DataFrame(v_artist,
-                         columns=artist_svds)
-artist_df['song_id'] = np.array(song_id)
-
+for i, name in enumerate(artist_svds):
+    songs[name] = v_artist[:, i]
 
 # matrix factorization on genre_ids
+print(">>> start matrix factorization for songs genre_ids")
 genre_ids = songs['genre_ids'].str.split('|').tolist()
 song_id = songs.song_id.tolist()
 dict_genre = [{} if not isinstance(genre_ids[i], list)
@@ -74,12 +74,11 @@ svd_genre_id = TruncatedSVD(n_components=svd_components,
                             random_state=rand_seed).fit(m_genre)
 v_genre = svd_genre_id.transform(m_genre)
 genre_svds = ['genre_svd_'+str(i+1) for i in range(svd_components)]
-genre_df = pd.DataFrame(v_genre,
-                        columns=genre_svds)
-genre_df['song_id'] = np.array(song_id)
-
+for i, name in enumerate(genre_svds):
+    songs[name] = v_genre[:, i]
 
 # matrix factorization on song composer
+print(">>> start matrix factorization for songs composer")
 composers = songs['composer'].str.split('|').tolist()
 song_id = songs.song_id.tolist()
 dict_composer = [{} if not isinstance(composers[i], list)
@@ -95,11 +94,11 @@ svd_composer = TruncatedSVD(n_components=svd_components,
                             random_state=rand_seed).fit(m_composer)
 v_composer = svd_composer.transform(m_composer)
 composer_svds = ['composer_svd_'+str(i+1) for i in range(svd_components)]
-composer_df = pd.DataFrame(v_composer,
-                           columns=composer_svds)
-composer_df['song_id'] = np.array(song_id)
+for i, name in enumerate(composer_svds):
+    songs[name] = v_composer[:, i]
 
 # matrix factorization on lyricist
+print(">>> start matrix factorization for songs lyricist")
 lyricists = songs['lyricist'].str.split('|').tolist()
 song_id = songs.song_id.tolist()
 dict_lyricist = [{} if not isinstance(lyricists[i], list)
@@ -115,17 +114,9 @@ svd_lyricist = TruncatedSVD(n_components=svd_components,
                             random_state=rand_seed).fit(m_lyricist)
 v_lyricist = svd_lyricist.transform(m_lyricist)
 lyricist_svds = ['lyricist_svd_'+str(i+1) for i in range(svd_components)]
-lyricist_df = pd.DataFrame(v_lyricist,
-                           columns=lyricist_svds)
-lyricist_df['song_id'] = np.array(song_id)
+for i, name in enumerate(lyricist_svds):
+    songs[name] = v_lyricist[:, i]
 
-# merge all features into the songs table
-songs = songs.merge(
-        artist_df, on='song_id').merge(
-        genre_df, on='song_id').merge(
-        composer_df, on='song_id').merge(
-        lyricist_df, on='song_id').drop(
-        ['genre_ids', 'artist_name', 'composer', 'lyricist', 'language'],
-        axis=1)
-
-songs.to_csv('cleaned_songs.csv')
+songs = songs.drop(
+    ['genre_ids', 'artist_name', 'composer', 'lyricist', 'language'],
+    axis=1)
