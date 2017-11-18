@@ -14,7 +14,6 @@ from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data.sampler import SequentialSampler
 
 output_file = 'submission.csv'
-train_file = ''
 
 # training MLP
 # set random seed
