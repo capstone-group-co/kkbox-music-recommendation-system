@@ -293,6 +293,8 @@ print(test.columns.tolist())
 print(">>> removing unwanted tables to save RAM")
 del songs, members, song_extra_info
 
-train.drop(['msno', 'song_id'], axis=1).to_csv('full_train.csv')
-test.drop(['msno', 'song_id'], axis=1).to_csv('full_test.csv')
+train.drop(['msno', 'song_id'], axis=1).to_csv(
+    'full_train.csv', float_format='%.5f')
+test.drop(['msno', 'song_id'], axis=1).to_csv(
+    'full_test.csv', float_format='%.5f')
 print('Final files are generated.')

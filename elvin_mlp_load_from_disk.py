@@ -18,9 +18,16 @@ output_file = 'submission.csv'
 # training MLP
 # set random seed
 torch.manual_seed(1122)
+torch.cuda.manual_seed(1122)
+
 print(">>> load train and test for pytorch training")
-train = np.loadtxt('full_train.csv', delimiter=',', skiprows=1)
-test = np.loadtxt('full_test.csv', delimiter=',', skiprows=1)
+# TODO: loading from csv with either streaming or full load is too costly
+# TODO: build Dataset connection that load from database (with prebuilt index)
+train = np.loadtxt('full_train.csv', dtype='str', delimiter=',', skiprows=1)
+test = np.loadtxt('full_test.csv', dtype='str', delimiter=',', skiprows=1)
+train[train == ''] = '0.0'
+test[test == ''] = '0.0'
+
 test_id = test[:, 0]
 test = test[:, 1:]
 
@@ -29,14 +36,14 @@ print(">>> generate train, val, test data for mlp")
 x_train, x_val, y_train, y_val = train_test_split(
     train[:, 1:], train[:, 0], test_size=0.001)
 x_test, y_test = test, np.zeros((test.shape[0], 1))
-
+'''
 # impute missing values
 print(">>> impute missing values")
 imputer = Imputer()
 x_train = imputer.fit_transform(x_train)
 x_val = imputer.transform(x_val)
 x_test = imputer.transform(x_test)
-
+'''
 # rescale training data
 print(">>> rescale data")
 x_train = scale(x_train, axis=0)
