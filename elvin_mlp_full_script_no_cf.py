@@ -1,6 +1,7 @@
 """
-This script is run on a down-sized test_data version and has dealt with all bugs
-The only challenge left is the RAM limitation.
+Although this approach has skipped the cf scoring part, the code still runs out
+of memory. It appears that the only workaround is to write the combined df into
+local file and load that file in the training algorithm with a lazy loader.
 """
 import numpy as np
 import pandas as pd
@@ -14,10 +15,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import scale, Imputer
 from sklearn.metrics import confusion_matrix
 
-from surprise import SVD
-from surprise import Dataset
-from surprise import Reader
-
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -26,18 +23,22 @@ import torch.optim as optim
 from torch.utils.data import TensorDataset, DataLoader
 from torch.utils.data.sampler import SequentialSampler
 
+import gc
+
 output_file = 'submission.csv'
-file_names = ['../test_data/members.csv',
-              '../test_data/song_extra_info.csv',
-              '../test_data/songs.csv',
-              '../test_data/test.csv',
-              '../test_data/train.csv']
+file_names = ['../raw_data/members.csv',
+              '../raw_data/song_extra_info.csv',
+              '../raw_data/songs.csv',
+              '../raw_data/test.csv',
+              '../raw_data/train.csv']
 
 members, song_extra_info, songs, test, train = [pd.read_csv(x)
                                                 for x in file_names]
 
 members, song_extra_info, songs, test, train =\
     stanimp.kkbox_cleaning(members, song_extra_info, songs, test, train)
+
+del song_extra_info
 
 """
 SONGS TABLE FEATURE ENGINEERING
@@ -52,6 +53,7 @@ lang_bi_v = language_lb.transform(
 lang_binaries = ['language_bi_'+str(i+1) for i in range(lang_bi_v.shape[1])]
 for i, name in enumerate(lang_binaries):
     songs[name] = lang_bi_v[:, i]
+del language_lb, lang_bi_v, lang_binaries
 
 # matrix factorization on song artist_name
 print(">>> start matrix factorization for songs artist_name")
@@ -71,6 +73,8 @@ v_artist = svd_artist_name.transform(m_artist)
 artist_svds = ['artist_svd_'+str(i+1) for i in range(svd_components)]
 for i, name in enumerate(artist_svds):
     songs[name] = v_artist[:, i]
+del artist_names, dict_artist, song_id, vec_artist, m_artist, svd_artist_name,\
+    v_artist, artist_svds
 
 # matrix factorization on genre_ids
 print(">>> start matrix factorization for songs genre_ids")
@@ -91,6 +95,8 @@ v_genre = svd_genre_id.transform(m_genre)
 genre_svds = ['genre_svd_'+str(i+1) for i in range(svd_components)]
 for i, name in enumerate(genre_svds):
     songs[name] = v_genre[:, i]
+del genre_ids, song_id, dict_genre, vec_genre, m_genre, svd_genre_id, v_genre,\
+    genre_svds
 
 # matrix factorization on song composer
 print(">>> start matrix factorization for songs composer")
@@ -111,6 +117,8 @@ v_composer = svd_composer.transform(m_composer)
 composer_svds = ['composer_svd_'+str(i+1) for i in range(svd_components)]
 for i, name in enumerate(composer_svds):
     songs[name] = v_composer[:, i]
+del composers, song_id, dict_composer, vec_composer, m_composer, svd_composer,\
+    v_composer, composer_svds
 
 # matrix factorization on lyricist
 print(">>> start matrix factorization for songs lyricist")
@@ -131,12 +139,15 @@ v_lyricist = svd_lyricist.transform(m_lyricist)
 lyricist_svds = ['lyricist_svd_'+str(i+1) for i in range(svd_components)]
 for i, name in enumerate(lyricist_svds):
     songs[name] = v_lyricist[:, i]
+del lyricists, song_id, dict_lyricist, vec_lyricist, m_lyricist, svd_lyricist,\
+    v_lyricist, lyricist_svds
 
 print(">>> removing unwanted columns")
 songs = songs.drop(
     ['genre_ids', 'artist_name', 'composer', 'lyricist', 'language'],
     axis=1)
 print(">>> songs table feature engineering completed")
+gc.collect()
 
 """
 MEMBERS TABLE FEATURE ENGINEERING
@@ -151,6 +162,7 @@ gender_bi_v = gender_lb.transform(
 gender_binaries = ['gender_bi_'+str(i+1) for i in range(gender_bi_v.shape[1])]
 for i, name in enumerate(gender_binaries):
     members[name] = gender_bi_v[:, i].astype(float)
+del gender_lb, gender_bi_v, gender_binaries
 
 print(">>> start binarize members city")
 # binarize language categories
@@ -161,6 +173,7 @@ city_bi_v = city_lb.transform(
 city_binaries = ['city_bi_'+str(i+1) for i in range(city_bi_v.shape[1])]
 for i, name in enumerate(city_binaries):
     members[name] = city_bi_v[:, i].astype(float)
+del city_lb, city_bi_v, city_binaries
 
 print(">>> start binarize members registered_via")
 # binarize language categories
@@ -171,6 +184,7 @@ rv_bi_v = rv_lb.transform(
 rv_binaries = ['rv_bi_'+str(i+1) for i in range(rv_bi_v.shape[1])]
 for i, name in enumerate(rv_binaries):
     members[name] = rv_bi_v[:, i].astype(float)
+del rv_lb, rv_bi_v, rv_binaries
 
 print(">>> generating day_since_founding for membership init time")
 # create day_since_founding
@@ -190,6 +204,7 @@ print(">>> removing unwanted columns")
 members = members.drop(['city', 'gender', 'registered_via',
                         'registration_init_time', 'expiration_date'], axis=1)
 print(">>> members table feature generation completed")
+gc.collect()
 
 """
 MEMBER-SONG TABLE FEATURE ENGINEERING
@@ -241,53 +256,7 @@ train = pd.concat([train, temp_df.iloc[:train.shape[0], 2:]], axis=1)
 test = pd.concat([test, temp_df.iloc[train.shape[0]:, 2:]], axis=1)
 print(">>> train and test set cleaned")
 del temp_df
-
-"""
-COLLABORATIVE FILTERING SCORE GENERATION
-"""
-print(">>> training collaborative filtering system for cf scoring")
-train['target'] = train.target.astype('category')
-
-# create separate training data for cf_algo
-train_cf = train[['msno', 'song_id', 'target']]
-
-
-def train_cf_algo(model_data):
-    print(">>> training cf model...")
-    reader = Reader(rating_scale=(0, 1))
-    data = Dataset.load_from_df(
-        model_data[['msno', 'song_id', 'target']], reader)
-    algo = SVD()
-    trainset = data.build_full_trainset()
-    algo.train(trainset)
-    return algo
-
-
-def get_cf_score(model_data, trained_algo):
-    print(">>> generating cf predicted scores...")
-    score = []
-    for i in range(len(model_data)):
-        userid = str(model_data.msno.iloc[i])
-        itemid = str(model_data.song_id.iloc[i])
-        pred = trained_algo.predict(userid, itemid)
-        predicted_rating = pred.est
-        score.append(predicted_rating)
-    score = np.array(score)
-    return(score)
-
-# train algo based on the full training data
-cf_algo = train_cf_algo(train_cf)
-
-# predict cf_score for the full training data
-print(">>> generating cf score for train")
-train['cf_score'] = get_cf_score(train_cf, cf_algo)
-print(">>> generating cf score for test")
-test['cf_score'] = get_cf_score(test, cf_algo)
-print(">>> cf score generated")
-
-del train_cf
-print(train.columns.tolist())
-print(test.columns.tolist())
+gc.collect()
 
 """
 FINAL TABLE ASSEMBLING
@@ -308,12 +277,13 @@ print(">>> test now has %i variables and %i observations" %
 print(train.columns.tolist())
 print(test.columns.tolist())
 print(">>> removing unwanted tables to save RAM")
-del songs, members, song_extra_info
+del songs, members
+gc.collect()
 
 # training MLP
 # set random seed
 torch.manual_seed(1122)
-# torch.cuda.manual_seed(1122)
+torch.cuda.manual_seed(1122)
 
 print(">>> adapt train and test for pytorch training")
 train = train.iloc[:, 2:].as_matrix().astype(float)
@@ -325,6 +295,8 @@ print(">>> generate train, val, test data for mlp")
 x_train, x_val, y_train, y_val = train_test_split(
     train[:, 1:], train[:, 0], test_size=0.1)
 x_test, y_test = test[:, :], np.zeros((test.shape[0], 1))
+del train, test
+gc.collect()
 
 # impute missing values
 print(">>> impute missing values")
@@ -368,7 +340,7 @@ print(">>> train, val, test dataset created")
 class MLP(nn.Module):
     def __init__(self):
         super(MLP, self).__init__()
-        self.l1 = nn.Linear(126, 20)
+        self.l1 = nn.Linear(125, 20)
         self.t1 = nn.Tanh()
         self.l2 = nn.Linear(20, 2)
         self.t2 = nn.LogSoftmax()
@@ -380,7 +352,7 @@ class MLP(nn.Module):
 
 print(">>> initiate mlp models")
 mlp = MLP()
-# mlp.cuda()
+mlp.cuda()
 criterion = nn.NLLLoss()
 optimizer = optim.SGD(mlp.parameters(), lr=0.1, momentum=0.9)
 
@@ -391,7 +363,7 @@ def trainEpoch(dataloader, epoch):
     mlp.train()
     for i, data in enumerate(dataloader, 0):
         inputs, labels = data
-        # inputs, labels = inputs.cuda(), labels.cuda()
+        inputs, labels = inputs.cuda(), labels.cuda()
         inputs, labels = Variable(inputs), Variable(labels)
         optimizer.zero_grad()
         outputs = mlp(inputs)
@@ -407,14 +379,14 @@ def validateModel(dataloader, epoch):
     pred = np.array([])
     targ = np.array([])
     for inputs, targets in dataloader:
-        # inputs, targets = inputs.cuda(), targets.cuda()
+        inputs, targets = inputs.cuda(), targets.cuda()
         inputs, targets = Variable(inputs), Variable(targets)
         outputs = mlp(inputs)
         test_loss += F.nll_loss(outputs, targets, size_average=False).data[0]
         pred = np.append(pred, outputs.topk(1)[1].data.view(1, -1).numpy())
         targ = np.append(targ, targets.data.numpy())
         prd = outputs.topk(1)[1].data
-        correct += prd.eq(targets.data.view_as(prd)).sum()
+        correct += prd.eq(targets.data.view_as(prd)).cpu().sum()
     test_loss /= len(dataloader.dataset)
     test_acc = correct / len(dataloader.dataset)
     cm = confusion_matrix(targ, pred)
@@ -428,11 +400,11 @@ def testModel(dataloader):
     mlp.eval()
     pred = np.array([])
     for inputs, _ in dataloader:
-        # inputs = inputs.cuda()
+        inputs = inputs.cuda()
         inputs = Variable(inputs)
         outputs = mlp(inputs)
         pred = np.append(pred,
-                         outputs.topk(1)[1].data.view(1, -1).numpy())
+                         outputs.topk(1)[1].data.view(1, -1).cpu().numpy())
     return pred
 
 # run the training epoch 100 times and test the result

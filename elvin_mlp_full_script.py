@@ -1,3 +1,9 @@
+"""
+This full script is the all-in-one code source. However, actually training
+the model appears to be harder since the RAM is limited. I will write two
+separate scripts that deal with either feature generation (save file) or
+neural network training.
+"""
 import numpy as np
 import pandas as pd
 import datetime
@@ -456,5 +462,3 @@ epoch_performance['epoch_id'] = np.arange(len(epoch_loss)) + 1
 epoch_performance['epoch_loss'] = np.array(epoch_loss)
 epoch_performance['epoch_acc'] = np.array(epoch_acc)
 epoch_performance.to_csv('epoch_performance.csv', index=False)
-
-# TODO: fix memory error problem by deleting objects unused
