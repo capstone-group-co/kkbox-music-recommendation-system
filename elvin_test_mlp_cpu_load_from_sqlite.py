@@ -1,8 +1,7 @@
 import numpy as np
 import pandas as pd
-import datetime
 from sqlalchemy import create_engine
-
+import time
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
@@ -11,14 +10,17 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SequentialSampler
 
-output_file = 'submission.csv'
-save_model = 'mlp_model' + datetime.datetime.now().strftime(
-    "%Y_%m_%d_%H_%M") + ".pt"
+output_file = 'test_submission.csv'
 sqlite_url = 'sqlite:///kkbox.db'
 train_table = 'full_train'
 test_table = 'full_test'
-batch_size = 80000
-total_epochs = 30
+batch_size = 5000
+'''
+b: 5000, loading: 8, training: 0, testing: 3.5
+b: 20000, loading: 30, training: 0, testing: 14
+b: 80000, loading: 100, training: 0.1, testing: 54 --best batch_size
+b: 100000, loading: 123, training: 0.1, testing: 67
+'''
 
 # set random seed
 torch.manual_seed(1122)
@@ -94,9 +96,12 @@ optimizer = optim.SGD(mlp.parameters(), lr=0.1, momentum=0.9)
 def trainEpoch(dataloader, epoch):
     print("Training Epoch %i" % (epoch + 1))
     mlp.train()
+    start = time.time()
     for i, data in enumerate(dataloader, 0):
-        print("Epoch %i, Iter %i" % (epoch + 1, i + 1))
+        print("Epoch %i, Iter %i:" % (epoch + 1, i + 1))
         inputs, labels = data[:, 1:], data[:, 0]
+        end = time.time()
+        print("Loading one batch takes %.4f seconds" % (end - start))
         inputs, labels = inputs.float(), labels.long()
         inputs, labels = Variable(inputs), Variable(labels)
         optimizer.zero_grad()
@@ -104,6 +109,7 @@ def trainEpoch(dataloader, epoch):
         loss = criterion(outputs, labels)
         loss.backward()
         optimizer.step()
+        break
 
 
 def testModel(dataloader):
@@ -116,25 +122,28 @@ def testModel(dataloader):
         pred = np.append(pred,
                          outputs.topk(1)[1].data.view(1, -1).numpy())
         pred = 1 - pred
+        break
     return pred
 
 
 # run the training epoch 100 times and test the result
 print(">>> training model with mlp")
-for epoch in range(total_epochs):
-    trainEpoch(trainloader, epoch)
+train_start = time.time()
+trainEpoch(trainloader, 0)
+train_end = time.time()
+print(">>> training one batch takes %.4f seconds" % (train_end - train_start))
 
 print(">>> creating predictions with mlp")
+test_start = time.time()
 pred = testModel(testloader)
+test_end = time.time()
+print(">>> testing one batch takes %.4f seconds" % (test_end - test_start))
 
-print(">>> saving model to local path")
-torch.save(mlp.state_dict(), save_model)
-
-print(">>> outputing predictions to local file")
+print(">>> outputing batch predictions to local file")
 pred = pred.astype(int)
 stmt3 = "SELECT id FROM full_test"
 test_id = kkbox_conn.execute(stmt3).fetchall()
-test_id = np.array([x[0] for x in test_id]).astype(int)
+test_id = np.array([x[0] for x in test_id]).astype(int)[:batch_size]
 submission = pd.DataFrame()
 submission['id'] = test_id
 submission['target'] = pred
