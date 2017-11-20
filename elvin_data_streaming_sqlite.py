@@ -1,7 +1,8 @@
 import numpy as np
 from sqlalchemy import create_engine
 from torch.utils.data import Dataset, DataLoader
-from torch.utils.data.sampler import SequentialSampler, RandomSampler
+from torch.utils.data.sampler import SequentialSampler
+import torch
 
 output_file = 'submission.csv'
 sqlite_url = 'sqlite:///kkbox.db'
@@ -46,12 +47,24 @@ class KKBOXDataset(Dataset):
 
 trainset = KKBOXDataset(kkbox_conn, train_table)
 testset = KKBOXDataset(kkbox_conn, test_table)
-trainsampler = RandomSampler(trainset)
-trainloader = DataLoader(trainset, batch_size=2, shuffle=True)
+trainloader = DataLoader(trainset, batch_size=250, shuffle=True)
 testsampler = SequentialSampler(testset)
-testloader = DataLoader(testset, batch_size=2, shuffle=False,
+testloader = DataLoader(testset, batch_size=250, shuffle=False,
                         sampler=testsampler)
 
+for i in trainloader:
+    x = i
+    break
+
+stmt3 = "SELECT id FROM full_test"
+test_id = kkbox_conn.execute(stmt3).fetchall()
+test_id = [x[0] for x in test_id]
+test_id = np.array(test_id)
+test_id = torch.from_numpy(test_id)
+
+test_id = torch.from_numpy(test_id[:100])
+x = torch.FloatTensor()
+y = torch.LongTensor()
 
 # reflect table structures with Table object
 # metadata = MetaData(kkbox_engine)
