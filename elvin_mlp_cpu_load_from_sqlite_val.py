@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
-# import torch.nn.functional as F
+import torch.nn.functional as F
 import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SequentialSampler
@@ -17,9 +17,12 @@ save_model = 'mlp_model' + datetime.datetime.now().strftime(
 sqlite_url = 'sqlite:///kkbox.db'
 train_table = 'full_train'
 test_table = 'full_test'
-batch_size = 80000
+batch_size = 5000
 total_epochs = 1
 num_workers = 0
+val_freq = 5
+learning_rate = 1
+momentum = 0.7
 
 # set random seed
 torch.manual_seed(1122)
@@ -88,11 +91,11 @@ class MLP(nn.Module):
 print(">>> initiate mlp models")
 mlp = MLP()
 criterion = nn.NLLLoss()
-optimizer = optim.SGD(mlp.parameters(), lr=0.1, momentum=0.9)
+optimizer = optim.SGD(mlp.parameters(), lr=learning_rate, momentum=momentum)
 
 
 # define a training epoch function
-def trainEpoch(dataloader, epoch):
+def trainEpoch(dataloader, epoch, val_freq=20):
     print("Training Epoch %i" % (epoch + 1))
     mlp.train()
     for i, data in enumerate(dataloader, 0):
@@ -100,6 +103,15 @@ def trainEpoch(dataloader, epoch):
         inputs, labels = data[:, 1:], data[:, 0]
         inputs, labels = inputs.float(), labels.long()
         inputs, labels = Variable(inputs), Variable(labels)
+        if (i + 1) % val_freq == 0:
+            mlp.eval()
+            outputs = mlp(inputs)
+            loss = F.nll_loss(outputs, labels).data[0]
+            prd = 1 - outputs.topk(1)[1].data
+            correct = prd.eq(labels.data.view_as(prd)).sum()
+            acc = correct / len(dataloader.dataset)
+            print("Accuracy: %.2f percent" % (acc * 100))
+            mlp.train()
         optimizer.zero_grad()
         outputs = mlp(inputs)
         loss = criterion(outputs, labels)
@@ -123,7 +135,7 @@ def testModel(dataloader):
 # run the training epoch 100 times and test the result
 print(">>> training model with mlp")
 for epoch in range(total_epochs):
-    trainEpoch(trainloader, epoch)
+    trainEpoch(trainloader, epoch, val_freq)
 
 print(">>> creating predictions with mlp")
 pred = testModel(testloader)
