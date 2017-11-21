@@ -1,3 +1,6 @@
+"""
+testing steps of the data transformation and check for mismatched row count
+"""
 import numpy as np
 import pandas as pd
 import datetime
@@ -7,11 +10,6 @@ from sklearn.preprocessing import LabelBinarizer
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.decomposition import TruncatedSVD
 
-from surprise import SVD
-from surprise import Dataset
-from surprise import Reader
-
-output_file = 'submission.csv'
 file_names = ['../raw_data/members.csv',
               '../raw_data/song_extra_info.csv',
               '../raw_data/songs.csv',
@@ -24,6 +22,13 @@ members, song_extra_info, songs, test, train = [pd.read_csv(x)
 members, song_extra_info, songs, test, train =\
     stanimp.kkbox_cleaning(members, song_extra_info, songs, test, train)
 
+del song_extra_info
+
+print(members.shape)
+print(songs.shape)
+print(train.shape)
+print(test.shape)
+
 """
 SONGS TABLE FEATURE ENGINEERING
 """
@@ -34,9 +39,11 @@ language_lb = LabelBinarizer()
 language_lb.fit(songs.language.values.astype(int).reshape(-1, 1))
 lang_bi_v = language_lb.transform(
     songs.language.values.astype(int).reshape(-1, 1))
+print(lang_bi_v.shape)
 lang_binaries = ['language_bi_'+str(i+1) for i in range(lang_bi_v.shape[1])]
 for i, name in enumerate(lang_binaries):
     songs[name] = lang_bi_v[:, i]
+print(songs.shape)
 
 # matrix factorization on song artist_name
 print(">>> start matrix factorization for songs artist_name")
@@ -46,6 +53,7 @@ dict_artist = [{name.strip(): 1 for name in artist_names[i]} for
                i in range(len(song_id))]
 vec_artist = DictVectorizer().fit(dict_artist)
 m_artist = vec_artist.transform(dict_artist)
+print(m_artist.shape)
 svd_components = 10
 rand_seed = 1122
 svd_artist_name = TruncatedSVD(n_components=svd_components,
@@ -280,12 +288,15 @@ train = train.drop(['source_system_tab', 'source_screen_name', 'source_type'],
 test = test.drop(['source_system_tab', 'source_screen_name', 'source_type'],
                  axis=1)
 
+
 print(">>> merging train with songs and members")
-train = train.merge(songs, on='song_id').merge(members, on='msno')
+train = train.merge(songs, how='left', on='song_id').merge(members, how='left',
+                                                           on='msno')
 print(">>> train now has %i variables and %i observations" %
       (train.shape[1], train.shape[0]))
 print(">>> merging test with songs and members")
-test = test.merge(songs, on='song_id').merge(members, on='msno')
+test = test.merge(songs, how='left', on='song_id').merge(members, how='left',
+                                                         on='msno')
 print(">>> test now has %i variables and %i observations" %
       (test.shape[1], test.shape[0]))
 print(train.columns.tolist())
