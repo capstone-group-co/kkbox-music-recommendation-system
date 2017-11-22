@@ -11,18 +11,15 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.sampler import SequentialSampler
 
-output_file = 'submission.csv'
-save_model = 'mlp_model' + datetime.datetime.now().strftime(
-    "%Y_%m_%d_%H_%M") + ".pt"
 sqlite_url = 'sqlite:///kkbox.db'
 train_table = 'full_train'
 test_table = 'full_test'
-batch_size = 5000
+batch_size = 10000
 total_epochs = 1
 num_workers = 0
-val_freq = 5
-learning_rate = 1
-momentum = 0.7
+val_freq = 10
+learning_rate = 0.2
+momentum = 0.9
 
 # set random seed
 torch.manual_seed(1122)
@@ -38,7 +35,7 @@ class KKBOXDataset(Dataset):
     def __init__(self, sql_conn, table_name):
         """
         Args:
-        sql_url: dabase url used for sqlalchemy to build engine
+        sql_conn: dabase connection used by sqlalchemy to build engine
         table_name: respective table to query for
         """
         self.sql_conn = sql_conn
@@ -54,14 +51,12 @@ class KKBOXDataset(Dataset):
             idx + 1)
         line = self.sql_conn.execute(stmt).fetchone()
         # print('fetched:', line[-1])
-        line = self.make_list(line)
-        line = line[1:-1]
+        line = [x for x in line]
+        line = line[1:]
         # print('sliced:', line)
         line = np.asarray(line, dtype=float)
+        line[np.isnan(line)] = 0
         return line
-
-    def make_list(self, line):
-        return [x for x in line]
 
 
 trainset = KKBOXDataset(kkbox_conn, train_table)
@@ -77,7 +72,7 @@ print(">>> train, test dataset created")
 class MLP(nn.Module):
     def __init__(self):
         super(MLP, self).__init__()
-        self.l1 = nn.Linear(131, 20)
+        self.l1 = nn.Linear(130, 20)
         self.t1 = nn.Tanh()
         self.l2 = nn.Linear(20, 2)
         self.t2 = nn.LogSoftmax()
@@ -107,10 +102,10 @@ def trainEpoch(dataloader, epoch, val_freq=20):
             mlp.eval()
             outputs = mlp(inputs)
             loss = F.nll_loss(outputs, labels).data[0]
-            prd = 1 - outputs.topk(1)[1].data
+            prd = outputs.topk(1)[1].data
             correct = prd.eq(labels.data.view_as(prd)).sum()
-            acc = correct / len(dataloader.dataset)
-            print("Accuracy: %.2f percent" % (acc * 100))
+            acc = correct / dataloader.batch_size
+            print("Accuracy: %i percent" % (acc * 100))
             mlp.train()
         optimizer.zero_grad()
         outputs = mlp(inputs)
@@ -119,7 +114,8 @@ def trainEpoch(dataloader, epoch, val_freq=20):
         optimizer.step()
 
 
-def testModel(dataloader):
+def testModel(dataloader, epoch):
+    print("Testing Epoch %i" % (epoch + 1))
     mlp.eval()
     pred = np.array([])
     for data in dataloader:
@@ -128,27 +124,29 @@ def testModel(dataloader):
         outputs = mlp(inputs)
         pred = np.append(pred,
                          outputs.topk(1)[1].data.view(1, -1).numpy())
-        pred = 1 - pred
+        pred = pred
     return pred
 
+# define test_id for submission
+stmt = "SELECT id FROM full_test"
+test_id = kkbox_conn.execute(stmt).fetchall()
+test_id = np.array([x[0] for x in test_id]).astype(int)
 
 # run the training epoch 100 times and test the result
 print(">>> training model with mlp")
 for epoch in range(total_epochs):
     trainEpoch(trainloader, epoch, val_freq)
-
-print(">>> creating predictions with mlp")
-pred = testModel(testloader)
-
-print(">>> saving model to local path")
-torch.save(mlp.state_dict(), save_model)
-
-print(">>> outputing predictions to local file")
-pred = pred.astype(int)
-stmt3 = "SELECT id FROM full_test"
-test_id = kkbox_conn.execute(stmt3).fetchall()
-test_id = np.array([x[0] for x in test_id]).astype(int)
-submission = pd.DataFrame()
-submission['id'] = test_id
-submission['target'] = pred
-submission.to_csv(output_file, index=False)
+    save_model = 'mlp_model_' + datetime.datetime.now().strftime(
+        "%Y_%m_%d_%H_%M") + '_epoch_' + str(epoch + 1) + ".pt"
+    print(">>> saving model to local path")
+    torch.save(mlp.state_dict(), save_model)
+    print(">>> creating predictions with mlp")
+    pred = testModel(testloader, epoch)
+    print(">>> outputing predictions to local file")
+    pred = pred.astype(int)
+    submission = pd.DataFrame()
+    submission['id'] = test_id
+    submission['target'] = pred
+    output_file = 'submission_' + datetime.datetime.now().strftime(
+        "%Y_%m_%d_%H_%M") + '_epoch_' + str(epoch + 1) + ".csv"
+    submission.to_csv(output_file, index=False)
