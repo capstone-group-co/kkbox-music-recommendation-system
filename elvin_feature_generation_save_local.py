@@ -326,16 +326,17 @@ del songs, members
 print(train.columns.tolist())
 print(test.columns.tolist())
 
-'''
+
 train.drop(['msno', 'song_id'], axis=1).to_csv(
     'full_train.csv', float_format='%.8f')
 test.drop(['msno', 'song_id'], axis=1).to_csv(
     'full_test.csv', float_format='%.8f')
 '''
-
 kkbox_db = create_engine('sqlite:///kkbox.db')
-train.drop(['msno', 'song_id'], axis=1).to_sql('full_train', kkbox_db)
-test.drop(['msno', 'song_id'], axis=1).to_sql('full_test', kkbox_db)
-
+train.drop(['msno', 'song_id'], axis=1).to_sql('full_train', kkbox_db,
+                                               chunksize=50000)
+test.drop(['msno', 'song_id'], axis=1).to_sql('full_test', kkbox_db,
+                                              chunksize=50000)
+'''
 
 print('Final files are generated.')

@@ -24,8 +24,7 @@ print(">>> itering through full_train.csv")
 for df in pd.read_csv(train_file, chunksize=chunksize, iterator=True):
     df = df.rename(columns={c: c.replace(" ", '_') for c in df.columns})
     df.index += j  # iterator starts by 1, then jumps to where left last round
-    df['index'] = df.index
-    df.drop(['Unnamed:_0'], axis=1)
+    df = df.drop(['Unnamed:_0'], axis=1)
     i += 1
     df.to_sql('full_train', kkbox_db, if_exists='append', index=False)
     j = df.index[-1] + 1  # get the last index of current load
@@ -42,8 +41,7 @@ print(">>> itering through full_test.csv")
 for df in pd.read_csv(test_file, chunksize=chunksize, iterator=True):
     df = df.rename(columns={c: c.replace(" ", '_') for c in df.columns})
     df.index += j
-    df['index'] = df.index
-    df.drop(['Unnamed:_0'], axis=1)
+    df = df.drop(['Unnamed:_0'], axis=1)
     i += 1
     df.to_sql('full_test', kkbox_db, if_exists='append', index=False)
     j = df.index[-1] + 1
