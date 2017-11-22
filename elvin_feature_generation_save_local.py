@@ -2,14 +2,16 @@ import numpy as np
 import pandas as pd
 import datetime
 import main_standardized_import as stanimp
+from sqlalchemy import create_engine
 
-from sklearn.preprocessing import LabelBinarizer
+from sklearn.preprocessing import LabelBinarizer, Imputer, scale
 from sklearn.feature_extraction import DictVectorizer
 from sklearn.decomposition import TruncatedSVD
 
 from surprise import SVD
 from surprise import Dataset
 from surprise import Reader
+
 
 file_names = ['../raw_data/members.csv',
               '../raw_data/song_extra_info.csv',
@@ -22,6 +24,8 @@ members, song_extra_info, songs, test, train = [pd.read_csv(x)
 
 members, song_extra_info, songs, test, train =\
     stanimp.kkbox_cleaning(members, song_extra_info, songs, test, train)
+
+del song_extra_info
 
 """
 SONGS TABLE FEATURE ENGINEERING
@@ -36,6 +40,9 @@ lang_bi_v = language_lb.transform(
 lang_binaries = ['language_bi_'+str(i+1) for i in range(lang_bi_v.shape[1])]
 for i, name in enumerate(lang_binaries):
     songs[name] = lang_bi_v[:, i]
+
+print(">>> start normalizing song_length")
+songs['song_length'] = scale(songs.song_length)
 
 # matrix factorization on song artist_name
 print(">>> start matrix factorization for songs artist_name")
@@ -53,6 +60,8 @@ svd_artist_name = TruncatedSVD(n_components=svd_components,
                                random_state=rand_seed).fit(m_artist)
 v_artist = svd_artist_name.transform(m_artist)
 artist_svds = ['artist_svd_'+str(i+1) for i in range(svd_components)]
+v_artist = Imputer().fit_transform(v_artist)
+v_artist = scale(v_artist)
 for i, name in enumerate(artist_svds):
     songs[name] = v_artist[:, i]
 
@@ -73,6 +82,8 @@ svd_genre_id = TruncatedSVD(n_components=svd_components,
                             random_state=rand_seed).fit(m_genre)
 v_genre = svd_genre_id.transform(m_genre)
 genre_svds = ['genre_svd_'+str(i+1) for i in range(svd_components)]
+v_genre = Imputer().fit_transform(v_genre)
+v_genre = scale(v_genre)
 for i, name in enumerate(genre_svds):
     songs[name] = v_genre[:, i]
 
@@ -93,6 +104,8 @@ svd_composer = TruncatedSVD(n_components=svd_components,
                             random_state=rand_seed).fit(m_composer)
 v_composer = svd_composer.transform(m_composer)
 composer_svds = ['composer_svd_'+str(i+1) for i in range(svd_components)]
+v_composer = Imputer().fit_transform(v_composer)
+v_composer = scale(v_composer)
 for i, name in enumerate(composer_svds):
     songs[name] = v_composer[:, i]
 
@@ -113,6 +126,8 @@ svd_lyricist = TruncatedSVD(n_components=svd_components,
                             random_state=rand_seed).fit(m_lyricist)
 v_lyricist = svd_lyricist.transform(m_lyricist)
 lyricist_svds = ['lyricist_svd_'+str(i+1) for i in range(svd_components)]
+v_lyricist = Imputer().fit_transform(v_lyricist)
+v_lyricist = scale(v_lyricist)
 for i, name in enumerate(lyricist_svds):
     songs[name] = v_lyricist[:, i]
 
@@ -125,6 +140,8 @@ print(">>> songs table feature engineering completed")
 """
 MEMBERS TABLE FEATURE ENGINEERING
 """
+members.head()
+
 print(">>> MEMBERS TABLE FEATURE ENGINEERING")
 print(">>> start binarize members gender")
 # binarize language categories
@@ -162,12 +179,24 @@ launch_time = datetime.datetime.strptime('2004-10-01', '%Y-%m-%d')
 members['day_since_founding'] = ((
     members.registration_init_time -
     launch_time)/np.timedelta64(1, 'D')).astype(float)
+members['day_since_founding'] = scale(members.day_since_founding)
 
 print(">>> generating day_membership_duration before membership expires")
 # create day_membership_duration
 members['day_membership_duration'] = ((
     members.expiration_date - members.registration_init_time) / np.timedelta64(
     1, 'D')).astype(float)
+dmd_imputer = Imputer().fit(
+    members.day_membership_duration.values.reshape(-1, 1))
+members['day_membership_duration'] = dmd_imputer.transform(
+    members.day_membership_duration.values.reshape(-1, 1))
+members['day_membership_duration'] = scale(members.day_membership_duration)
+
+print(">>> imputing bd")
+bd_imputer = Imputer(strategy='most_frequent').fit(
+    members.bd.values.reshape(-1, 1))
+members['bd'] = bd_imputer.transform(members.bd.values.reshape(-1, 1))
+members['bd'] = scale(members.bd)
 
 print(">>> removing unwanted columns")
 # delete categorical variables and datetime variables
@@ -217,26 +246,25 @@ def main_table_engineering(main_df):
         ['source_system_tab', 'source_screen_name', 'source_type'], axis=1)
     return main_df
 
+
 temp_df = train.drop(['target'], axis=1).append(
     test.drop(['id'], axis=1))
 temp_df = main_table_engineering(temp_df)
 
 train = pd.concat([train, temp_df.iloc[:train.shape[0], 2:]], axis=1)
 test = pd.concat([test, temp_df.iloc[train.shape[0]:, 2:]], axis=1)
-train = main_table_engineering(train)
-print(">>> train cleaned")
-test = main_table_engineering(test)
-print(">>> test cleaned")
+print(">>> train and test set cleaned")
+del temp_df
 
 """
 COLLABORATIVE FILTERING SCORE GENERATION
 """
+
 print(">>> training collaborative filtering system for cf scoring")
 train['target'] = train.target.astype('category')
 
 # create separate training data for cf_algo
-train_cf = train.drop(
-    ['source_system_tab', 'source_screen_name', 'source_type'], axis=1)
+train_cf = train[['msno', 'song_id', 'target']]
 
 
 def train_cf_algo(model_data):
@@ -262,6 +290,7 @@ def get_cf_score(model_data, trained_algo):
     score = np.array(score)
     return(score)
 
+
 # train algo based on the full training data
 cf_algo = train_cf_algo(train_cf)
 
@@ -272,22 +301,42 @@ print(">>> generating cf score for test")
 test['cf_score'] = get_cf_score(test, cf_algo)
 print(">>> cf score generated")
 
+del train_cf
+
 """
 FINAL TABLE ASSEMBLING
 """
-train = train.drop(['source_screen_name', 'source_system_tab', 'source_type'],
+train = train.drop(['source_system_tab', 'source_screen_name', 'source_type'],
                    axis=1)
-test = test.drop(['source_screen_name', 'source_system_tab', 'source_type'],
+test = test.drop(['source_system_tab', 'source_screen_name', 'source_type'],
                  axis=1)
+
 print(">>> merging train with songs and members")
-train = train.merge(songs, on='song_id').merge(members, on='msno')
+train = train.merge(songs, how='left', on='song_id').merge(members, how='left',
+                                                           on='msno')
 print(">>> train now has %i variables and %i observations" %
       (train.shape[1], train.shape[0]))
 print(">>> merging test with songs and members")
-test = test.merge(songs, on='song_id').merge(members, on='msno')
+test = test.merge(songs, how='left', on='song_id').merge(members, how='left',
+                                                         on='msno')
 print(">>> test now has %i variables and %i observations" %
       (test.shape[1], test.shape[0]))
-print(train.dtypes)
-print(test.dtypes)
 print(">>> removing unwanted tables to save RAM")
-del songs, members, song_extra_info
+del songs, members
+print(train.columns.tolist())
+print(test.columns.tolist())
+
+
+train.drop(['msno', 'song_id'], axis=1).to_csv(
+    'full_train.csv', float_format='%.8f')
+test.drop(['msno', 'song_id'], axis=1).to_csv(
+    'full_test.csv', float_format='%.8f')
+'''
+kkbox_db = create_engine('sqlite:///kkbox.db')
+train.drop(['msno', 'song_id'], axis=1).to_sql('full_train', kkbox_db,
+                                               chunksize=50000)
+test.drop(['msno', 'song_id'], axis=1).to_sql('full_test', kkbox_db,
+                                              chunksize=50000)
+'''
+
+print('Final files are generated.')
