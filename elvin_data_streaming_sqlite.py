@@ -65,20 +65,32 @@ test_id = torch.from_numpy(test_id)
 test_id = torch.from_numpy(test_id[:100])
 x = torch.FloatTensor()
 y = torch.LongTensor()
-
+'''
 # reflect table structures with Table object
-# metadata = MetaData(kkbox_engine)
-# full_train = Table('full_train', metadata, autoload=True,
-#                   autoload_with=kkbox_engine)
-# full_test = Table('full_test', metadata, autoload=True,
-#                   autoload_with=kkbox_engine)
+from sqlalchemy import MetaData, Table
+metadata = MetaData(kkbox_engine)
+full_train = Table('full_train', metadata, autoload=True,
+                   autoload_with=kkbox_engine)
+full_test = Table('full_test', metadata, autoload=True,
+                   autoload_with=kkbox_engine)
 
-# stmt1 = 'SELECT * FROM full_train WHERE rowid = 1'
-# result1 = kkbox_conn.execute(stmt1).fetchone()
-# result1 = [x for x in result1]
-# len(result1[1:-1])
-# np.asarray(result1, dtype=float)
 
-# stmt2 = 'SELECT max(rowid) FROM full_train'
-# result2 = kkbox_conn.execute(stmt2).scalar()
-# result2
+def get_record(command, conn):
+    r = conn.execute(command).fetchall()
+    r = [x for x in r]
+    r = np.asarray(r, dtype=float)
+    return r
+
+command = "SELECT target FROM full_train"
+x = get_record(command, kkbox_conn)
+
+stmt1 = 'SELECT * FROM full_train WHERE rowid = 1'
+result1 = kkbox_conn.execute(stmt1).fetchone()
+result1 = [x for x in result1]
+len(result1[1:-1])
+np.asarray(result1, dtype=float)
+
+stmt2 = 'SELECT max(rowid) FROM full_train'
+result2 = kkbox_conn.execute(stmt2).scalar()
+result2
+'''
