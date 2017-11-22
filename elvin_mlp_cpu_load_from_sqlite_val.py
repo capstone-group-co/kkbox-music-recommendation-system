@@ -18,8 +18,9 @@ batch_size = 10000
 total_epochs = 1
 num_workers = 0
 val_freq = 10
-learning_rate = 0.2
-momentum = 0.9
+learning_rate = 1
+momentum = 0.5
+load_model = False
 
 # set random seed
 torch.manual_seed(1122)
@@ -85,6 +86,10 @@ class MLP(nn.Module):
 
 print(">>> initiate mlp models")
 mlp = MLP()
+# load local model if specified
+if load_model:
+    mlp.load_state_dict(torch.load(load_model))
+
 criterion = nn.NLLLoss()
 optimizer = optim.SGD(mlp.parameters(), lr=learning_rate, momentum=momentum)
 
@@ -106,6 +111,7 @@ def trainEpoch(dataloader, epoch, val_freq=20):
             correct = prd.eq(labels.data.view_as(prd)).sum()
             acc = correct / dataloader.batch_size
             print("Accuracy: %i percent" % (acc * 100))
+            print("Loss: %.4f" % (loss))
             mlp.train()
         optimizer.zero_grad()
         outputs = mlp(inputs)
