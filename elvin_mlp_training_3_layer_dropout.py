@@ -30,11 +30,11 @@ test_table = 'full_test'
 batch_size = 250
 total_epochs = 3
 num_workers = 0
-val_freq = 30
-learning_rate = 1
+val_freq = 20
+learning_rate = 0.1
 momentum = 0.9
-load_model = '../logs/mlp_model_2017_11_22_15_20_epoch_2_lr_1_m_0.9.pt'
-last_epoch = 2
+load_model = False
+last_epoch = 0
 
 # set random seed
 torch.manual_seed(1122)
@@ -87,14 +87,19 @@ print(">>> train, test dataset created")
 class MLP(nn.Module):
     def __init__(self):
         super(MLP, self).__init__()
-        self.l1 = nn.Linear(130, 20)
-        self.t1 = nn.Tanh()
-        self.l2 = nn.Linear(20, 2)
-        self.t2 = nn.LogSoftmax()
+        self.l1 = nn.Linear(130, 150)
+        self.t1 = nn.ReLU()
+        self.d1 = nn.Dropout(p=0.6)
+        self.l2 = nn.Linear(150, 50)
+        self.t2 = nn.ReLU()
+        self.d2 = nn.Dropout(p=0.2)
+        self.l3 = nn.Linear(50, 2)
+        self.t3 = nn.LogSoftmax()
 
     def forward(self, x):
-        x = self.t1(self.l1(x))
-        x = self.t2(self.l2(x))
+        x = self.d1(self.t1(self.l1(x)))
+        x = self.d2(self.t2(self.l2(x)))
+        x = self.t3(self.l3(x))
         return x
 
 
@@ -124,8 +129,7 @@ def trainEpoch(dataloader, epoch, val_freq=20):
             prd = outputs.topk(1)[1].data
             correct = prd.eq(labels.data.view_as(prd)).sum()
             acc = correct / dataloader.batch_size
-            # aucmeter = AUCMeter().add(prd, labels.data.view_as(prd))
-            # auc, _, _ = aucmeter.value()
+            # auc = AUCMeter().add(prd, labels.data.view_as(prd)).value()[0]
             print("Accuracy: %i percent" % (acc * 100))
             print("Loss: %.4f" % (loss))
             # print("AUC: %.4f" % (auc))
