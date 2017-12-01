@@ -76,4 +76,4 @@ final_pred.columns = ['id', 'target']
 
 
 # Save the final_pred to CSV to submit
-final_pred.to_csv('first_submission.csv', index=False)
+final_pred.to_csv('first_submission.csv', index=False,float_format = '%.5f')
