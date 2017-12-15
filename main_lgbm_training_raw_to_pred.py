@@ -1,6 +1,13 @@
 """
 generating predictions based on raw csv input files from end to end
+
+data cleaning and preprocessing part can be used to non-regression and non-
+neural network models, since data has not been scaled or binarized or
+normalized
+
+script also contains greyed out scripts that saves processed dataframe to a csv
 """
+
 import numpy as np
 import pandas as pd
 import datetime
@@ -19,16 +26,14 @@ params = {}
 params['objective'] = 'binary'
 params['boosting'] = 'gbdt'
 params['verbose'] = 0
-params['num_leaves'] = 350
-params['learning_rate'] = 0.05
+params['num_leaves'] = 256
+params['learning_rate'] = 0.2
 params['bagging_fraction'] = 0.95
 params['bagging_freq'] = 1
 params['bagging_seed'] = 1122
 params['metric'] = 'auc'
-params['max_bin'] = 510
-params['max_depth'] = 9
-boost_rounds = 300
-
+params['max_depth'] = 8
+boost_rounds = 100
 
 print(">>> Loading data")
 file_names = ['../raw_data/members.csv',
@@ -43,8 +48,22 @@ members, song_extra_info, songs, test, train = [pd.read_csv(x)
 members, song_extra_info, songs, test, train =\
     stanimp.kkbox_cleaning(members, song_extra_info, songs, test, train)
 
-del song_extra_info
-gc.collect()
+# SONG EXTRA INFO FEATURE ENGINEERING
+print(">>> SONG EXTRA INFO FEATURE ENGINEERING <<<")
+
+
+def isrc_to_year(isrc):
+    if type(isrc) == str:
+        if int(isrc[5:7]) > 17:
+            return 1900 + int(isrc[5:7])
+        else:
+            return 2000 + int(isrc[5:7])
+    else:
+        return np.nan
+
+song_extra_info['song_year'] = song_extra_info['isrc'].apply(isrc_to_year)
+song_extra_info.drop(['isrc', 'name'], axis=1, inplace=True)
+
 
 # SONGS TABLE FEATURE ENGINEERING
 print(">>> SONGS TABLE FEATURE ENGINEERING <<<")
@@ -136,14 +155,15 @@ gc.collect()
 # MERGING TABLES
 print(">>> Generating final tables...")
 print(">>> Merging train with songs and members")
-train = train.merge(songs, how='left', on='song_id').merge(members, how='left',
-                                                           on='msno')
+train = train.merge(songs, how='left', on='song_id').merge(
+    members, how='left', on='msno').merge(
+    song_extra_info, on='song_id', how='left')
 print(">>> Train now has %i variables and %i observations" %
       (train.shape[1], train.shape[0]))
 print(">>> Merging test with songs and members")
-
-test = test.merge(songs, how='left', on='song_id').merge(members, how='left',
-                                                         on='msno')
+test = test.merge(songs, how='left', on='song_id').merge(
+    members, how='left', on='msno').merge(
+    song_extra_info, on='song_id', how='left')
 print(">>> Test now has %i variables and %i observations" %
       (test.shape[1], test.shape[0]))
 
